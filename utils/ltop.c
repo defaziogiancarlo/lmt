@@ -121,6 +121,8 @@ typedef struct {
     sample_t kbytes_free;       /* free space (kbytes) */
     sample_t kbytes_total;      /* total space (kbytes) */
     sample_t getxattr;          /* getxattr ops/sec */
+    sample_t read_bytes;          /* read_bytes bytes/sec */
+    sample_t write_bytes;       /* write_bytes bytes/sec */
 } mdtstat_t;
 
 typedef struct {
@@ -572,20 +574,20 @@ main (int argc, char *argv[])
                 }
                 break;
             case '>':               /* change sorting column */
-            case '<': 
-            case 't': 
-            case 's': 
-            case 'r': 
-            case 'w': 
-            case 'i': 
-            case 'x': 
-            case 'l': 
-            case 'g': 
-            case 'L': 
-            case 'C': 
-            case 'u': 
-            case 'm': 
-            case 'S': 
+            case '<':
+            case 't':
+            case 's':
+            case 'r':
+            case 'w':
+            case 'i':
+            case 'x':
+            case 'l':
+            case 'g':
+            case 'L':
+            case 'C':
+            case 'u':
+            case 'm':
+            case 'S':
                 if (in_ostwin) {
                     ost_fp = _get_sort_index (c, ost_fp, ost_col,
                                               sizeof(ost_col)/sizeof(ost_col[0]));
@@ -648,7 +650,7 @@ main (int argc, char *argv[])
                                 stale_secs, playf, &tcycle, &sample_period);
                     last_sample = time (NULL);
                     recompute = 1;
-                } 
+                }
                 break;
             case '\t':              /* tab - fast-fwd 1 minute */
                 if (playf) {
@@ -732,8 +734,8 @@ main (int argc, char *argv[])
             recompute = 0;
         }
         if (resort) {
-            _sort_tgtlist (ost_data, tcycle, ost_col[ost_fp].fun); 
-            _sort_tgtlist (oss_data, tcycle, ost_col[ost_fp].fun); 
+            _sort_tgtlist (ost_data, tcycle, ost_col[ost_fp].fun);
+            _sort_tgtlist (oss_data, tcycle, ost_col[ost_fp].fun);
             _sort_tgtlist (mdt_data, tcycle, mdt_col[mdt_fp].fun);
             _sort_tgtlist (mds_data, tcycle, mdt_col[mdt_fp].fun);
             resort = 0;
@@ -879,6 +881,8 @@ _update_display_top (WINDOW *win, char *fs, List ost_data, List mdt_data,
         getxattr      += sample_rate (m->getxattr, tnow);
         minodes_free  += sample_val (m->inodes_free, tnow) / (1024*1024);
         minodes_total += sample_val (m->inodes_total, tnow) / (1024*1024);
+        rmbps         += sample_rate (m->read_bytes, tnow) / (1024*1024);
+        wmbps         += sample_rate (m->write_bytes, tnow) / (1024*1024);
 
         /*
          * recovery_status is just a string, and has no timestamp.
@@ -945,7 +949,7 @@ _update_display_top (WINDOW *win, char *fs, List ost_data, List mdt_data,
         mvwprintw (win, y++, 0,
           "    Inodes: %11s total, %11s used (%3s%%), %11s free",
                     "", "", "", "" );
-    } 
+    }
     mvwprintw (win, y++, 0,
       "     Space: %10.3ft total, %10.3ft used (%3.0f%%), %10.3ft free",
                tbytes_total, tbytes_total - tbytes_free,
@@ -1185,7 +1189,7 @@ _update_display_mdt (WINDOW *win, int line, void *target, int stale_secs,
     double ipct_used = uktot > 0 ? ((uktot - ukfree) / uktot)*100.0 : 0;
 
     if ((tnow - m->common.tgt_metric_timestamp) > stale_secs) {
-        // available info is expired 
+        // available info is expired
         mvwprintw (win, line, 0, "%4.4s data is stale", m->common.name);
     } else if (m->common.recov_status &&
                !strstr(m->common.recov_status,"COMPLETE")) {
@@ -1339,6 +1343,8 @@ _copy_mdtstat (void *src_v)
     m->common.pct_cpu =      sample_copy (src->common.pct_cpu);
     m->common.pct_mem =      sample_copy (src->common.pct_mem);
     m->getxattr =     sample_copy (src->getxattr);
+    m->read_bytes =   sample_copy (src->read_bytes);
+    m->write_bytes =  sample_copy (src->write_bytes);
     return (void *) m;
 }
 
@@ -1373,6 +1379,8 @@ _create_mdtstat (char *name, int stale_secs)
     m->common.pct_cpu =      sample_create (stale_secs);
     m->common.pct_mem =      sample_create (stale_secs);
     m->getxattr =     sample_create (stale_secs);
+    m->read_bytes =   sample_create (stale_secs);
+    m->write_bytes =  sample_create (stale_secs);
     return m;
 }
 
@@ -1398,6 +1406,8 @@ _destroy_mdtstat (mdtstat_t *m)
     sample_destroy (m->common.pct_cpu);
     sample_destroy (m->common.pct_mem);
     sample_destroy (m->getxattr);
+    sample_destroy (m->read_bytes);
+    sample_destroy (m->write_bytes);
     free (m);
 }
 
@@ -1452,7 +1462,7 @@ _cmp_server_names (char *servername1, char *servername2)
     if (*p1 && *p2
             && (p1 - servername1) == (p2 - servername2)
             && !strncmp (servername1, servername2, p1 - servername1)) {
-        return (n1 < n2 ? -1 
+        return (n1 < n2 ? -1
               : n1 > n2 ? 1 : 0);
     }
     return strcmp (servername1, servername2);
@@ -1969,6 +1979,8 @@ _update_mdt (char *mdtname, char *servername, uint64_t inodes_free,
             sample_invalidate (m->getxattr);
             sample_invalidate (m->common.pct_cpu);
             sample_invalidate (m->common.pct_mem);
+            sample_invalidate (m->read_bytes);
+            sample_invalidate (m->write_bytes);
             snprintf (m->common.servername, sizeof (m->common.servername),
                       "%s", servername);
             m->common.recov_status[0]='\0';
@@ -2009,6 +2021,10 @@ _update_mdt (char *mdtname, char *servername, uint64_t inodes_free,
                     sample_update (m->rename, (double)samples, trcv);
                 else if (!strcmp (opname, "getxattr"))
                     sample_update (m->getxattr, (double)samples, trcv);
+                else if (!strcmp (opname, "read_bytes"))
+                    sample_update (m->read_bytes, (double)samples, trcv);
+                else if (!strcmp (opname, "write_bytes"))
+                    sample_update (m->write_bytes, (double)samples, trcv);
                 free (opname);
             }
         }
@@ -2203,8 +2219,8 @@ _play_file (char *fs, List mdt_data, List ost_data, List time_series,
     if (tdiffp && !feof (f))
         *tdiffp = tdiff;
     if (ts && time_series)
-        list_prepend (time_series, ts); 
-        
+        list_prepend (time_series, ts);
+
 }
 
 /* Seek to [count] batches of cerebro data ago.
@@ -2283,7 +2299,7 @@ _single_ost_update_summary (void *ost_v, void *summary_v)
     /* Any "missing clients" on OST's should be reflected in OSS exp.
      */
     sample_min (summary->num_exports, ost->num_exports);
-    
+
     if (ost->common.tag)
         summary->common.tag = ost->common.tag;
 }
@@ -2351,6 +2367,8 @@ _single_mdt_update_summary (void *mdt_v, void *summary_v)
     sample_add (summary->kbytes_total, mdt->kbytes_total);
     sample_add (summary->kbytes_free, mdt->kbytes_free);
     sample_add (summary->getxattr, mdt->getxattr);
+    sample_add (summary->read_bytes, mdt->read_bytes);
+    sample_add (summary->write_bytes, mdt->write_bytes);
 
     /* %cpu and %mem are per-server, and so the initial copy
      * made by _copy_mdtstat() is correct for the summarized

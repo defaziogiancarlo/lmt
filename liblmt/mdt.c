@@ -76,6 +76,8 @@ static const char *optab_mdt_v1[] = {
     "llog_init",
     "notify",
     "quotactl",
+    "read_bytes",
+    "write_bytes",
 };
 
 /* LEGACY
@@ -254,7 +256,7 @@ _get_mdtstring (pctx_t ctx, char *name, char *s, int len)
             goto done;
     }
     retval = 0;
-done: 
+done:
     if (uuid)
         free (uuid);
     if (stats)
@@ -575,7 +577,7 @@ done:
     }
     return retval;
 }
-    
+
 int lmt_mds_decode_v2_mdops (const char *s, char **opnamep, uint64_t *samplesp,
                              uint64_t *sump, uint64_t *sumsquaresp)
 {
