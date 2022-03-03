@@ -76,6 +76,8 @@ static const char *optab_mdt_v1[] = {
     "llog_init",
     "notify",
     "quotactl",
+    "read_bytes",
+    "write_bytes",
 };
 
 /* LEGACY

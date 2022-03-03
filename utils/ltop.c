@@ -121,6 +121,8 @@ typedef struct {
     sample_t kbytes_free;       /* free space (kbytes) */
     sample_t kbytes_total;      /* total space (kbytes) */
     sample_t getxattr;          /* getxattr ops/sec */
+    sample_t read_bytes;          /* read_bytes bytes/sec */
+    sample_t write_bytes;       /* write_bytes bytes/sec */
 } mdtstat_t;
 
 typedef struct {
@@ -879,6 +881,8 @@ _update_display_top (WINDOW *win, char *fs, List ost_data, List mdt_data,
         getxattr      += sample_rate (m->getxattr, tnow);
         minodes_free  += sample_val (m->inodes_free, tnow) / (1024*1024);
         minodes_total += sample_val (m->inodes_total, tnow) / (1024*1024);
+        rmbps         += sample_rate (m->read_bytes, tnow);
+        wmbps         += sample_rate (m->write_bytes, tnow);
 
         /*
          * recovery_status is just a string, and has no timestamp.
@@ -1339,6 +1343,8 @@ _copy_mdtstat (void *src_v)
     m->common.pct_cpu =      sample_copy (src->common.pct_cpu);
     m->common.pct_mem =      sample_copy (src->common.pct_mem);
     m->getxattr =     sample_copy (src->getxattr);
+    m->read_bytes =   sample_copy (src->read_bytes);
+    m->write_bytes =  sample_copy (src->write_bytes);
     return (void *) m;
 }
 
@@ -1373,6 +1379,8 @@ _create_mdtstat (char *name, int stale_secs)
     m->common.pct_cpu =      sample_create (stale_secs);
     m->common.pct_mem =      sample_create (stale_secs);
     m->getxattr =     sample_create (stale_secs);
+    m->read_bytes =   sample_create (stale_secs);
+    m->write_bytes =  sample_create (stale_secs);
     return m;
 }
 
@@ -1398,6 +1406,8 @@ _destroy_mdtstat (mdtstat_t *m)
     sample_destroy (m->common.pct_cpu);
     sample_destroy (m->common.pct_mem);
     sample_destroy (m->getxattr);
+    sample_destroy (m->read_bytes);
+    sample_destroy (m->write_bytes);
     free (m);
 }
 
@@ -1969,6 +1979,8 @@ _update_mdt (char *mdtname, char *servername, uint64_t inodes_free,
             sample_invalidate (m->getxattr);
             sample_invalidate (m->common.pct_cpu);
             sample_invalidate (m->common.pct_mem);
+            sample_invalidate (m->read_bytes);
+            sample_invalidate (m->write_bytes);
             snprintf (m->common.servername, sizeof (m->common.servername),
                       "%s", servername);
             m->common.recov_status[0]='\0';
@@ -2009,6 +2021,10 @@ _update_mdt (char *mdtname, char *servername, uint64_t inodes_free,
                     sample_update (m->rename, (double)samples, trcv);
                 else if (!strcmp (opname, "getxattr"))
                     sample_update (m->getxattr, (double)samples, trcv);
+                else if (!strcmp (opname, "read_bytes"))
+                    sample_update (m->read_bytes, (double)samples, trcv);
+                else if (!strcmp (opname, "write_bytes"))
+                    sample_update (m->write_bytes, (double)samples, trcv);
                 free (opname);
             }
         }
@@ -2351,6 +2367,8 @@ _single_mdt_update_summary (void *mdt_v, void *summary_v)
     sample_add (summary->kbytes_total, mdt->kbytes_total);
     sample_add (summary->kbytes_free, mdt->kbytes_free);
     sample_add (summary->getxattr, mdt->getxattr);
+    sample_add (summary->read_bytes, mdt->read_bytes);
+    sample_add (summary->write_bytes, mdt->write_bytes);
 
     /* %cpu and %mem are per-server, and so the initial copy
      * made by _copy_mdtstat() is correct for the summarized
