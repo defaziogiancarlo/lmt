@@ -881,8 +881,8 @@ _update_display_top (WINDOW *win, char *fs, List ost_data, List mdt_data,
         getxattr      += sample_rate (m->getxattr, tnow);
         minodes_free  += sample_val (m->inodes_free, tnow) / (1024*1024);
         minodes_total += sample_val (m->inodes_total, tnow) / (1024*1024);
-        rmbps         += sample_rate (m->read_bytes, tnow) / (1024*1024);
-        wmbps         += sample_rate (m->write_bytes, tnow) / (1024*1024);
+        rmbps         += sample_rate (m->read_bytes, tnow);
+        wmbps         += sample_rate (m->write_bytes, tnow);
 
         /*
          * recovery_status is just a string, and has no timestamp.
