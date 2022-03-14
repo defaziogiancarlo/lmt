@@ -211,14 +211,14 @@ static int _cmp_oststat_bywbw (oststat_t *o1, oststat_t *o2);
 static int _cmp_oststat_byspc (oststat_t *o1, oststat_t *o2);
 
 /* MDT/MDS */
+static int _cmp_mdtstat_byrbw (mdtstat_t *m1, mdtstat_t *m2);
+static int _cmp_mdtstat_bywbw (mdtstat_t *m1, mdtstat_t *m2);
 static int _cmp_mdtstat_byopen (mdtstat_t *m1, mdtstat_t *m2);
-static int _cmp_mdtstat_byclose (mdtstat_t *m1, mdtstat_t *m2);
 static int _cmp_mdtstat_bygetattr (mdtstat_t *m1, mdtstat_t *m2);
 static int _cmp_mdtstat_bysetattr (mdtstat_t *m1, mdtstat_t *m2);
 static int _cmp_mdtstat_byunlink (mdtstat_t *m1, mdtstat_t *m2);
 static int _cmp_mdtstat_byrmdir (mdtstat_t *m1, mdtstat_t *m2);
 static int _cmp_mdtstat_bymkdir (mdtstat_t *m1, mdtstat_t *m2);
-static int _cmp_mdtstat_byrename (mdtstat_t *m1, mdtstat_t *m2);
 static int _cmp_mdtstat_byspc     (mdtstat_t *m1, mdtstat_t *m2);
 static int _cmp_mdtstat_byino     (mdtstat_t *m1, mdtstat_t *m2);
 
@@ -274,14 +274,14 @@ sort_t ost_col[] = {
 sort_t mdt_col[] = {
     { .fun = (ListCmpF)_cmp_tgtstat_bytarget, .k =  't', .h = "%sMDT "      },
     { .fun = (ListCmpF)_cmp_tgtstat_byserver, .k =  's', .h = "        %sMDS"},
-    { .fun = (ListCmpF)_cmp_mdtstat_byopen,   .k =  'o', .h = " %sOpen"      },
-    { .fun = (ListCmpF)_cmp_mdtstat_byclose,  .k =  'C', .h = "%sClose"      },
+    { .fun = (ListCmpF)_cmp_mdtstat_byrbw,    .k =  'r', .h = " %srMB/s"     },
+    { .fun = (ListCmpF)_cmp_mdtstat_bywbw,    .k =  'w', .h = " %swMB/s"     },
+    { .fun = (ListCmpF)_cmp_mdtstat_byopen,   .k =  'd', .h = " %sOpen"      },
     { .fun = (ListCmpF)_cmp_mdtstat_bygetattr,.k =  'g', .h = "%sGetAt"      },
     { .fun = (ListCmpF)_cmp_mdtstat_bysetattr,.k =  'S', .h = "%sSetAt"      },
     { .fun = (ListCmpF)_cmp_mdtstat_byunlink, .k =  'U', .h = "%sUnlnk"      },
     { .fun = (ListCmpF)_cmp_mdtstat_bymkdir,  .k =  'M', .h = "%sMkdir"      },
     { .fun = (ListCmpF)_cmp_mdtstat_byrmdir,  .k =  'r', .h = "%sRmdir"      },
-    { .fun = (ListCmpF)_cmp_mdtstat_byrename, .k =  'R', .h = "%sRenam"      },
     { .fun = (ListCmpF)_cmp_tgtstat_bycpu,    .k =  'u', .h = " %s%%cpu"     },
     { .fun = (ListCmpF)_cmp_tgtstat_bymem,    .k =  'm', .h = " %s%%mem"     },
     { .fun = (ListCmpF)_cmp_mdtstat_byspc,    .k =  'T', .h = " %s%%spc"     },
@@ -797,8 +797,8 @@ static void _update_display_help (WINDOW *win)
 
     mvwprintw (win, y++, 2, "x          Sort on export count (ascending/OST)");
     mvwprintw (win, y++, 2, "C          Sort on connect rate (descending/OST)");
-    mvwprintw (win, y++, 2, "r          Sort on read b/w (descending/OST)");
-    mvwprintw (win, y++, 2, "w          Sort on write b/w (descending/OST)");
+    mvwprintw (win, y++, 2, "r          Sort on read b/w (descending)");
+    mvwprintw (win, y++, 2, "w          Sort on write b/w (descending)");
     mvwprintw (win, y++, 2, "i          Sort on IOPS (descending/OST)");
     mvwprintw (win, y++, 2, "l          Sort on lock count (descending/OST)");
     mvwprintw (win, y++, 2, "g          Sort on lock grant rate (descending/OST)");
@@ -1203,14 +1203,14 @@ _update_display_mdt (WINDOW *win, int line, void *target, int stale_secs,
                    " %5.0f %5.0f %5.0f %5.0f %5.0f %5.0f %5.0f %5.0f"
                    " %5.0f %5.0f %5.0f %5.0f",
                    m->common.name, _ltrunc (m->common.servername, 10),
+                   sample_rate (m->read_bytes, tnow),
+                   sample_rate (m->write_bytes, tnow),
                    sample_rate (m->open, tnow),
-                   sample_rate (m->close, tnow),
                    sample_rate (m->getattr, tnow),
                    sample_rate (m->setattr, tnow),
                    sample_rate (m->unlink, tnow),
                    sample_rate (m->mkdir, tnow),
                    sample_rate (m->rmdir, tnow),
-                   sample_rate (m->rename, tnow),
                    sample_val (m->common.pct_cpu, tnow),
                    sample_val (m->common.pct_mem, tnow),
                    pct_used, ipct_used
@@ -1645,20 +1645,28 @@ _cmp_mdtstat_byino (mdtstat_t *m1, mdtstat_t *m2)
 }
 
 
+/* Used for list_sort () of MDT list by read bandwidth (descending order).
+ */
+static int
+_cmp_mdtstat_byrbw (mdtstat_t *m1, mdtstat_t *m2)
+{
+    return -1 * sample_rate_cmp (m1->read_bytes, m2->read_bytes, sort_tnow);
+}
+
+/* Used for list_sort () of MDT list by write bandwidth (descending order).
+ */
+static int
+_cmp_mdtstat_bywbw (mdtstat_t *m1, mdtstat_t *m2)
+{
+    return -1 * sample_rate_cmp (m1->write_bytes, m2->write_bytes, sort_tnow);
+}
+
 /* Used for list_sort () of MDT list by opens (descending order).
  */
 static int
 _cmp_mdtstat_byopen (mdtstat_t *m1, mdtstat_t *m2)
 {
     return -1 * sample_rate_cmp (m1->open, m2->open, sort_tnow);
-}
-
-/* Used for list_sort () of MDT list by closes (descending order).
- */
-static int
-_cmp_mdtstat_byclose (mdtstat_t *m1, mdtstat_t *m2)
-{
-    return -1 * sample_rate_cmp (m1->close, m2->close, sort_tnow);
 }
 
 /* Used for list_sort () of MDT list by getattrs (descending order).
@@ -1699,14 +1707,6 @@ static int
 _cmp_mdtstat_bymkdir (mdtstat_t *m1, mdtstat_t *m2)
 {
     return -1 * sample_rate_cmp (m1->mkdir, m2->mkdir, sort_tnow);
-}
-
-/* Used for list_sort () of MDT list by renames (descending order).
- */
-static int
-_cmp_mdtstat_byrename (mdtstat_t *m1, mdtstat_t *m2)
-{
-    return -1 * sample_rate_cmp (m1->rename, m2->rename, sort_tnow);
 }
 
 /* Create an oststat record.
