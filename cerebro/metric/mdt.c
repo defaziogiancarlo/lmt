@@ -69,8 +69,8 @@ _get_metric_value (unsigned int *metric_value_type,
     char *buf = xmalloc (CEREBRO_MAX_DATA_STRING_LEN);
     int retval = -1;
 
-    if (lmt_mdt_string_v2 (ctx, buf, CEREBRO_MAX_DATA_STRING_LEN) < 0)
-        goto done; 
+    if (lmt_mdt_string_v3 (ctx, buf, CEREBRO_MAX_DATA_STRING_LEN) < 0)
+        goto done;
     *metric_value_type = CEREBRO_DATA_VALUE_TYPE_STRING;
     *metric_value_len = strlen (buf) + 1;
     *metric_value = buf;

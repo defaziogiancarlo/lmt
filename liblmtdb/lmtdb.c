@@ -52,7 +52,7 @@
 #include "lmt.h"
 
 /* FIXME [schema 1.1]:
- * 
+ *
  * . There is a fixed mapping of OST->OSS in the OST_INFO table, when there
  *   should be a dynamic mapping in OST_DATA to support failover.  As a
  *   result, during failover, b/w will be attributed to the wrong OSS.
@@ -245,8 +245,8 @@ _insert_mds (char *mdsname, float pct_cpu, float pct_mem, char *s, int ver)
     if (ver==1)
         rc = lmt_mdt_decode_v1_mdtinfo (s, &mdtname, &inodes_free,
                     &inodes_total, &kbytes_free, &kbytes_total, &mdops);
-    else if (ver==2)
-        rc = lmt_mdt_decode_v2_mdtinfo (s, &mdtname, &inodes_free,
+    else if (ver==2 || ver==3)
+        rc = lmt_mdt_decode_v2_v3_mdtinfo (s, &mdtname, &inodes_free,
                     &inodes_total, &kbytes_free, &kbytes_total, &recov_status,
                     &mdops);
     else
@@ -278,7 +278,7 @@ done:
 
 /* lmt_mdt_v1 and lmt_mdt_v2 helper */
 void
-lmt_db_insert_mdt_v1_v2 (char *s, int ver)
+lmt_db_insert_mdt_v1_v2_v3 (char *s, int ver)
 {
     ListIterator itr;
     char *mdt, *mdsname = NULL;
@@ -287,15 +287,15 @@ lmt_db_insert_mdt_v1_v2 (char *s, int ver)
 
     if (_init_db_ifneeded () < 0)
         goto done;
-    if (lmt_mdt_decode_v1_v2 (s, &mdsname, &pct_cpu, &pct_mem, &mdtinfo, ver) < 0)
+    if (lmt_mdt_decode_v1_v2_v3 (s, &mdsname, &pct_cpu, &pct_mem, &mdtinfo, ver) < 0)
         goto done;
     itr = list_iterator_create (mdtinfo);
     while ((mdt = list_next (itr)))
         _insert_mds (mdsname, pct_cpu, pct_mem, mdt, ver);
-    list_iterator_destroy (itr);        
+    list_iterator_destroy (itr);
 done:
     if (mdsname)
-        free (mdsname);    
+        free (mdsname);
     if (mdtinfo)
         list_destroy (mdtinfo);
 }
@@ -304,14 +304,14 @@ done:
 void
 lmt_db_insert_mdt_v1 (char *s)
 {
-    lmt_db_insert_mdt_v1_v2 (s, 1);
+    lmt_db_insert_mdt_v1_v2_v3 (s, 1);
 }
 
 /* lmt_mdt_v2: mds + multipe mdt's w/ recovery info */
 void
 lmt_db_insert_mdt_v2 (char *s)
 {
-    lmt_db_insert_mdt_v1_v2 (s, 2);
+    lmt_db_insert_mdt_v1_v2_v3 (s, 2);
 }
 
 /* lmt_router_v1: router */
@@ -335,7 +335,7 @@ lmt_db_insert_router_v1 (char *s)
             break;
         }
     }
-    list_iterator_destroy (itr);        
+    list_iterator_destroy (itr);
 done:
     if (rtrname)
         free (rtrname);
@@ -374,12 +374,12 @@ lmt_db_insert_mds_v2 (char *s)
     itr = list_iterator_create (mdops);
     while ((op = list_next (itr)))
         _insert_mds_ops (db, mdtname, op);
-    list_iterator_destroy (itr);        
+    list_iterator_destroy (itr);
 done:
     if (mdtname)
-        free (mdtname);    
+        free (mdtname);
     if (mdsname)
-        free (mdsname);    
+        free (mdsname);
     if (mdops)
         list_destroy (mdops);
 }
@@ -403,7 +403,7 @@ lmt_db_insert_oss_v1 (char *s)
          * as there is no way to tie OSS to a particular file system.
          */
         if (lmt_db_lookup (db, "oss", ossname) < 0)
-            continue; 
+            continue;
         if (lmt_db_insert_oss_data (db, 1, ossname, pct_cpu, pct_mem) < 0) {
             _trigger_db_reconnect ();
             goto done;
@@ -411,9 +411,9 @@ lmt_db_insert_oss_v1 (char *s)
     }
 done:
     if (ossname)
-        free (ossname);    
+        free (ossname);
     if (itr)
-        list_iterator_destroy (itr);        
+        list_iterator_destroy (itr);
 }
 
 /* lmt_ost_v1: single ost (no oss info) */
@@ -443,9 +443,9 @@ lmt_db_insert_ost_v1 (char *s)
     }
 done:
     if (ostname)
-        free (ostname);    
+        free (ostname);
     if (ossname)
-        free (ossname);    
+        free (ossname);
 }
 
 /*

@@ -2043,7 +2043,7 @@ _decode_mdt_v1 (char *val, char *fs, List mdt_data,
     uint64_t inodes_free, inodes_total;
     ListIterator itr;
 
-    if (lmt_mdt_decode_v1_v2 (val, &servername, &pct_cpu, &pct_mem, &mdtinfo, 1) < 0)
+    if (lmt_mdt_decode_v1_v2_v3 (val, &servername, &pct_cpu, &pct_mem, &mdtinfo, 1) < 0)
         return;
     itr = list_iterator_create (mdtinfo);
     while ((s = list_next (itr))) {
@@ -2078,11 +2078,47 @@ _decode_mdt_v2 (char *val, char *fs, List mdt_data,
 
     char *recov_info;
 
-    if (lmt_mdt_decode_v1_v2 (val, &mdsname, &pct_cpu, &pct_mem, &mdtinfo, 2) < 0)
+    if (lmt_mdt_decode_v1_v2_v3 (val, &mdsname, &pct_cpu, &pct_mem, &mdtinfo, 2) < 0)
         return;
     itr = list_iterator_create (mdtinfo);
     while ((s = list_next (itr))) {
         if (lmt_mdt_decode_v2_mdtinfo (s, &mdtname, &inodes_free,
+                                       &inodes_total, &kbytes_free,
+                                       &kbytes_total, &recov_info,
+                                       &mdops) == 0) {
+            if (!fs || _fsmatch (mdtname, fs))
+                _update_mdt (mdtname, mdsname, inodes_free, inodes_total,
+                             kbytes_free, kbytes_total, pct_cpu, pct_mem,
+                             recov_info, mdops, mdt_data, tnow, trcv,
+                             stale_secs, 2);
+            free (mdtname);
+            list_destroy (mdops);
+        }
+    }
+    list_iterator_destroy (itr);
+    list_destroy (mdtinfo);
+    free (mdsname);
+}
+
+
+static void
+_decode_mdt_v3 (char *val, char *fs, List mdt_data,
+                time_t tnow, time_t trcv, int stale_secs)
+{
+    List mdops, mdtinfo;
+    char *s, *mdsname, *mdtname;
+    float pct_cpu, pct_mem;
+    uint64_t kbytes_free, kbytes_total;
+    uint64_t inodes_free, inodes_total;
+    ListIterator itr;
+
+    char *recov_info;
+
+    if (lmt_mdt_decode_v1_v2_v3 (val, &mdsname, &pct_cpu, &pct_mem, &mdtinfo, 3) < 0)
+        return;
+    itr = list_iterator_create (mdtinfo);
+    while ((s = list_next (itr))) {
+        if (lmt_mdt_decode_v3_mdtinfo (s, &mdtname, &inodes_free,
                                        &inodes_total, &kbytes_free,
                                        &kbytes_total, &recov_info,
                                        &mdops) == 0) {
@@ -2133,6 +2169,8 @@ _poll_cerebro (char *fs, List mdt_data, List ost_data, int stale_secs,
             _decode_mdt_v1 (s, fs, mdt_data, tnow, trcv, stale_secs);
         else if (!strcmp (name, "lmt_mdt") && vers == 2)
             _decode_mdt_v2 (s, fs, mdt_data, tnow, trcv, stale_secs);
+        else if (!strcmp (name, "lmt_mdt") && vers == 3)
+            _decode_mdt_v3 (s, fs, mdt_data, tnow, trcv, stale_secs);
         else if (!strcmp (name, "lmt_ost") && vers == 2)
             _decode_ost_v2 (s, fs, ost_data, tnow, trcv, stale_secs);
         else if (!strcmp (name, "lmt_osc") && vers == 1)
@@ -2200,6 +2238,8 @@ _play_file (char *fs, List mdt_data, List ost_data, List time_series,
             _decode_mdt_v1 (s, fs, mdt_data, tnow, trcv, stale_secs);
         if (!strcmp (name, "lmt_mdt") && vers == 2)
             _decode_mdt_v2 (s, fs, mdt_data, tnow, trcv, stale_secs);
+        if (!strcmp (name, "lmt_mdt") && vers == 3)
+            _decode_mdt_v3 (s, fs, mdt_data, tnow, trcv, stale_secs);
         else if (!strcmp (name, "lmt_ost") && vers == 2)
             _decode_ost_v2 (s, fs, ost_data, tnow, trcv, stale_secs);
         else if (!strcmp (name, "lmt_osc") && vers == 1)

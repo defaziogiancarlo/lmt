@@ -128,13 +128,13 @@ main (int argc, char *argv[])
         err_exit ("proc_create");
 
     do {
-        errno = 0; 
+        errno = 0;
         if (!strcmp (metric, "sysstat"))
             n = _sysstat (ctx, buf, sizeof (buf));
         else if (!strcmp (metric, "ost"))
             n = lmt_ost_string_v2 (ctx, buf, sizeof (buf));
         else if (!strcmp (metric, "mdt"))
-            n = lmt_mdt_string_v2 (ctx, buf, sizeof (buf));
+            n = lmt_mdt_string_v3 (ctx, buf, sizeof (buf));
         else if (!strcmp (metric, "osc"))
             n = lmt_osc_string_v1 (ctx, buf, sizeof (buf));
         else if (!strcmp (metric, "router"))
@@ -175,4 +175,3 @@ done:
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-
