@@ -217,7 +217,7 @@ _insert_mds_ops (lmt_db_t db, char *mdtname, char *s)
     char *opname = NULL;
     uint64_t samples, sum, sumsquares;
 
-    if (lmt_mdt_decode_v1_mdops (s, &opname, &samples, &sum, &sumsquares) < 0)
+    if (lmt_mdt_decode_v2_v3_mdops (s, &opname, &samples, &sum, &sumsquares) < 0)
         goto done;
     if (lmt_db_insert_mds_ops_data (db, mdtname, opname,
                                     samples, sum, sumsquares) < 0) {
@@ -229,7 +229,7 @@ done:
         free (opname);
 }
 
-/* helper for lmt_db_insert_mdt_v1 () */
+/* helper for lmt_db_insert_mdt_v2_v3 () */
 static void
 _insert_mds (char *mdsname, float pct_cpu, float pct_mem, char *s, int ver)
 {
@@ -242,11 +242,12 @@ _insert_mds (char *mdsname, float pct_cpu, float pct_mem, char *s, int ver)
     char *recov_status = NULL;
     int rc;
 
-    if (ver==1)
-        rc = lmt_mdt_decode_v1_mdtinfo (s, &mdtname, &inodes_free,
-                    &inodes_total, &kbytes_free, &kbytes_total, &mdops);
-    else if (ver==2 || ver==3)
-        rc = lmt_mdt_decode_v2_v3_mdtinfo (s, &mdtname, &inodes_free,
+    if (ver==2)
+        rc = lmt_mdt_decode_v2_mdtinfo (s, &mdtname, &inodes_free,
+                    &inodes_total, &kbytes_free, &kbytes_total, &recov_status,
+                    &mdops);
+    else if (ver==3)
+        rc = lmt_mdt_decode_v3_mdtinfo (s, &mdtname, &inodes_free,
                     &inodes_total, &kbytes_free, &kbytes_total, &recov_status,
                     &mdops);
     else
@@ -276,9 +277,9 @@ done:
         list_destroy (mdops);
 }
 
-/* lmt_mdt_v1 and lmt_mdt_v2 helper */
+/* lmt_mdt_v2 and lmt_mdt_v3 helper */
 void
-lmt_db_insert_mdt_v1_v2_v3 (char *s, int ver)
+lmt_db_insert_mdt_v2_v3 (char *s, int ver)
 {
     ListIterator itr;
     char *mdt, *mdsname = NULL;
@@ -287,7 +288,7 @@ lmt_db_insert_mdt_v1_v2_v3 (char *s, int ver)
 
     if (_init_db_ifneeded () < 0)
         goto done;
-    if (lmt_mdt_decode_v1_v2_v3 (s, &mdsname, &pct_cpu, &pct_mem, &mdtinfo, ver) < 0)
+    if (lmt_mdt_decode_v2_v3 (s, &mdsname, &pct_cpu, &pct_mem, &mdtinfo, ver) < 0)
         goto done;
     itr = list_iterator_create (mdtinfo);
     while ((mdt = list_next (itr)))
@@ -300,18 +301,18 @@ done:
         list_destroy (mdtinfo);
 }
 
-/* lmt_mdt_v1: mds + multipe mdt's */
-void
-lmt_db_insert_mdt_v1 (char *s)
-{
-    lmt_db_insert_mdt_v1_v2_v3 (s, 1);
-}
-
 /* lmt_mdt_v2: mds + multipe mdt's w/ recovery info */
 void
 lmt_db_insert_mdt_v2 (char *s)
 {
-    lmt_db_insert_mdt_v1_v2_v3 (s, 2);
+    lmt_db_insert_mdt_v2_v3 (s, 2);
+}
+
+/* lmt_mdt_v2: mds + multipe mdt's w/ recovery info */
+void
+lmt_db_insert_mdt_v3 (char *s)
+{
+    lmt_db_insert_mdt_v2_v3 (s, 3);
 }
 
 /* lmt_router_v1: router */
